@@ -1,11 +1,18 @@
-declare const io;
-const socket = io();
+import { getUserMedia } from './media';
+import { SignallingService } from './signalling';
 
-socket.on('connection_success', (socketId: string) => {
-  console.log(`Socket ID: [${socketId}]`);
-  socket.emit('join_request', location.pathname);
-});
+const setLocalMediaStream = (stream: MediaStream) => {
+  const localVideoEl = document.getElementById('localVideo') as HTMLVideoElement;
+  localVideoEl.srcObject = stream;
+  return stream;
+}
 
-socket.on('fresh_face', (data: {socket_id: string, room_name: string}) => {
-  console.log(`A new socket has connected to '${data.room_name}': [${data.socket_id}]`);
-});
+// Get Media
+getUserMedia({audio: false, video: true})
+  .then(setLocalMediaStream)
+  .then(stream => {
+    new SignallingService(stream, null).create();
+  })
+  .catch((err: any) => {
+    console.log(err);
+  });
