@@ -2,7 +2,8 @@ const path = require('path');
 
 module.exports = {
   entry: {
-    main: './src/public/index.ts',
+    main: './src/socket/index.ts',
+    home: './src/home/index.ts'
   },
   mode: 'development',
   devtool: 'inline-source-map',

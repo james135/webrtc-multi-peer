@@ -2,8 +2,23 @@
 <html>
   <head>
     <title>What Ya Doin?</title>
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre.min.css">
   </head>
   <body>
-    <h1>What Ya Doin?</h1>
+    <div class="hero bg-gray">
+      <div class="hero-body">
+          <h1>What Ya Doin?</h1>
+          <h4>Instant video wall for you and your friends</h4>
+          <button id="create-link" class="btn btn-lg">Create Link</button>
+      </div>
+    </div>
+    <div style="padding: 15px; display: none;" id="hidden-area">
+      <div class="form-group">
+        <input class="form-input" type="text" id="copy-link" placeholder="Link">
+      </div>
+      <p>Link copied to your clipboard. Share it with some friends!</p>
+      <button id="goto-link" class="btn btn-primary">Go to link</button>
+    </div>
+    <script src="home.js"></script>
   </body>
 </html>
