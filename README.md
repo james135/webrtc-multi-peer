@@ -1,6 +1,8 @@
-# Web RTC Multi Peer Client and Socket.IO signalling service
+# Web RTC Multi Peer Client and Socket.IO signalling service example
 
-## Installation Instructions
+## Automatically connect and share a browsers video feed with an unlimited number of other browsers via RTC connections
+
+### Installation Instructions
 
 **Requires Node JS (https://nodejs.org/en/) to be installed to run the signalling server**
 
@@ -13,3 +15,7 @@ This will compile the Typescript and begin serving the server on port 3000. Visi
 
 ## How It Works
 
+Visiting the url with any endpoint e.g. localhost:3000/**some-random-room** creates a Socket.IO room.
+Any additional connections to the same endpoint automatically sets up an RTC connection between the peers and begins sharing the video stream.
+
+Open up a few browsers with the same endpoint and you will see multiple video feeds appear.

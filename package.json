@@ -12,7 +12,10 @@
   },
   "keywords": [
     "WebRTC",
-    "socket.io"
+    "socket.io",
+    "multi",
+    "multi-peer",
+    "WebRTC signalling"
   ],
   "author": "James Harris",
   "license": "ISC",
