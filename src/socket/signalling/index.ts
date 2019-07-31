@@ -12,11 +12,24 @@ export class SignallingService {
   private peerList: GuestConnection[] = []; // List of RTC connected peers
   private roomName = location.pathname;
 
+  // RTC Connection Hooks (allow the signalling service to communicate with the implementer)
+
+  // Fired when we receive a RTCTrackEvent from a peer
+  public onTrack: (peerId: string, track: RTCTrackEvent) => void = null;
+  // Fired when a socket quits (note: `maybe` as RTC connection may not be established by this point)
+  public onPeerMaybeQuit: (peerId: string) => void = null;
+
   constructor(
-    private localMediaStream: MediaStream,
     private rtcServerConfig: RTCConfiguration,
+    private localMediaStream: MediaStream,
   ) {}
 
+  /**
+   * Establish Socket.IO connection
+   *
+   * - Register Socket.IO (signalling) listeners
+   * - Register window.unload event to clean up connections and signal to peers
+   */
   create() {
     this.socket = io();
     this.registerListeners(this.socket);
@@ -50,43 +63,38 @@ export class SignallingService {
     socket.on('fresh_face', async (data: {socket_id: string, room_name: string}) => {
       try {
         console.log(`A new socket has connected to '${data.room_name}': [${data.socket_id}]`);
-        // Create an HTML Video container for this guests stream
-        this.insertVideoElement(data.socket_id);
         // Setup a new RTC Connection with this socket
         const peerConnection = this.createRTCPeerConnection(data.socket_id);
         const offer = await this.createOffer(peerConnection);
         // Signal the offer
         this.socket.emit('signal_offer', {from: this.socketId, to: data.socket_id, offer});
       } catch (err) {
-        console.log(err);
+        this.handleError(err);
       }
     });
 
     // A guest socket has left the room
     socket.on('bye_friend', (data: {socket_id: string, room_name: string}) => {
       console.log(`A socket has left '${data.room_name}': [${data.socket_id}]`);
-      // clean up resources
-      // 1. Remove <video></video> element
-      const guestVideoEl = document.querySelector(`#guest-${data.socket_id}`) as HTMLVideoElement;
-      if (guestVideoEl) {
-        document.getElementById('videos').removeChild(guestVideoEl);
+      // Clean up resources
+      // 1. Call custom onPeerMaybeQuit() handler
+      if (typeof this.onPeerMaybeQuit === 'function') {
+        this.onPeerMaybeQuit(data.socket_id);
       }
       // 2. Close RTC connection
       const peerIndex = this.peerList.findIndex(peer => peer.guestSocketId === data.socket_id);
       const peer = this.peerList[peerIndex];
       if (peer && peer.peerConnection) {
         peer.peerConnection.close();
+        // 3. Update peer list if peer is found
+        this.peerList.splice(peerIndex, 1);
       }
-      // 3. Update peer list
-      this.peerList.splice(peerIndex, 1);
     });
 
     // Socket being sent a RTCSessionDescriptionInit as an offer
     socket.on('offer_received', async (data: {from: string, to: string, offer: RTCSessionDescriptionInit}) => {
       try {
         console.log(`Receiving an RTC offer from ${data.from}`);
-        // Create an HTML Video container for this guests stream
-        this.insertVideoElement(data.from);
         // Setup a new RTC Connection with this socket
         const peerConnection = this.createRTCPeerConnection(data.from);
         peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -94,7 +102,7 @@ export class SignallingService {
         // Signal the answer
         this.socket.emit('signal_answer', {from: this.socketId, to: data.from, answer});
       } catch (err) {
-        console.log(err);
+        this.handleError(err);
       }
     });
 
@@ -125,18 +133,6 @@ export class SignallingService {
   }
 
   /**
-   * Create a <video></video> element for the guest
-   *
-   * @param guestId Guest socket ID assigned as elements id=""
-   */
-  private insertVideoElement(guestId: string) {
-    const video = document.createElement('video');
-    video.id = `guest-${guestId}`;
-    video.autoplay = true;
-    document.getElementById('videos').appendChild(video);
-  }
-
-  /**
    * Create an RTCPeerConnection for a new guest
    *
    * @param guestSocketId Guest socket ID
@@ -158,19 +154,19 @@ export class SignallingService {
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addTrack
     peerConnection.ontrack = event => {
       console.log(`Receiving media track from ${guestSocketId}`, event);
-      const guestVideoEl = document.querySelector(`#guest-${guestSocketId}`) as HTMLVideoElement;
-      if (event.streams && event.streams[0]) {
-        guestVideoEl.srcObject = event.streams[0];
-      } else {
-        let inboundStream = new MediaStream([event.track]);
-        guestVideoEl.srcObject = inboundStream;
+      // Call custom onTrack() handler
+      if (typeof this.onTrack === 'function') {
+        this.onTrack(guestSocketId, event);
       }
     }
-    console.log(this.localMediaStream.getTracks());
-    // Add local stream to the connection so it can be shared
-    for (const track of this.localMediaStream.getTracks()) {
-      peerConnection.addTrack(track);
+
+    // Add local stream to the connection (if available) so it can be shared
+    if (this.localMediaStream) {
+      for (const track of this.localMediaStream.getTracks()) {
+        peerConnection.addTrack(track);
+      }
     }
+
     // Add connection to list of peers
     this.peerList.push({guestSocketId, peerConnection});
 
@@ -197,5 +193,15 @@ export class SignallingService {
     const answer = await peerConnection.createAnswer();
     peerConnection.setLocalDescription(answer);
     return answer;
+  }
+
+  /**
+   * Handle errors during the signalling process
+   *
+   * @param err Error
+   */
+  private handleError(err: any) {
+    // TODO - create error handling process
+    console.log(err);
   }
 }
