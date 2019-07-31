@@ -1,7 +1,7 @@
 {
-  "name": "what-ya-doin",
+  "name": "webrtc-multi-peer",
   "version": "0.0.1",
-  "description": "Multi peer video app using WebRTC and Socket.IO",
+  "description": "Multi peer video app demo using WebRTC and Socket.IO",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
