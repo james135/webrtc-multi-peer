@@ -13,7 +13,7 @@ const createRandomString = () => {
 }
 
 const createRandomLink = () => {
-  return `${location.origin}/${createRandomString()}`;
+  return `${location.origin}/video/${createRandomString()}`;
 };
 
 if (createLinkButton && gotoLinkButton) {

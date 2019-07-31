@@ -3,6 +3,7 @@ declare const io; // Global Socket.IO object
 interface GuestConnection {
   guestSocketId: string, // ID of peers socket connection
   peerConnection: RTCPeerConnection, // Local RTC connection for this peer
+  dataChannel: RTCDataChannel, // Data channel connection
 }
 
 export class SignallingService {
@@ -10,7 +11,7 @@ export class SignallingService {
   private socket: any;  // Socket.IO
   private socketId: string; // ID of this browsers socket connection
   private peerList: GuestConnection[] = []; // List of RTC connected peers
-  private roomName = location.pathname;
+  private roomName: string; // Room name identified by last part of url path
 
   // RTC Connection Hooks (allow the signalling service to communicate with the implementer)
 
@@ -18,11 +19,16 @@ export class SignallingService {
   public onTrack: (peerId: string, track: RTCTrackEvent) => void = null;
   // Fired when a socket quits (note: `maybe` as RTC connection may not be established by this point)
   public onPeerMaybeQuit: (peerId: string) => void = null;
+  // Fired when data message received via RTC data channel
+  public onDataMessage: (peerId: string, message: string) => void = null;
 
   constructor(
     private rtcServerConfig: RTCConfiguration,
     private localMediaStream: MediaStream,
-  ) {}
+  ) {
+    const path = location.pathname.split('/');
+    this.roomName = path[path.length - 1] || 'general'; // Include default name 'general' if empty
+  }
 
   /**
    * Establish Socket.IO connection
@@ -41,6 +47,32 @@ export class SignallingService {
         peer.peerConnection.close();
       }
     });
+  }
+
+  /**
+   * Send data via RTC to all connections
+   *
+   * @param message Message to send
+   */
+  sendDataMessageToAll(message: string) {
+    for (const peer of this.peerList) {
+      if (peer && peer.dataChannel) {
+        peer.dataChannel.send(message);
+      }
+    }
+  }
+
+  /**
+   * Send data via RTC to specific connection
+   *
+   * @param socketId Socket ID of peer to send data to over RTC
+   * @param message Message to send
+   */
+  sendDataMessageToPeer(socketId: string, message: string) {
+    const peer = this.peerList.find(peer => peer.guestSocketId === socketId);
+    if (peer && peer.dataChannel) {
+      peer.dataChannel.send(message);
+    }
   }
 
   /**
@@ -65,6 +97,10 @@ export class SignallingService {
         console.log(`A new socket has connected to '${data.room_name}': [${data.socket_id}]`);
         // Setup a new RTC Connection with this socket
         const peerConnection = this.createRTCPeerConnection(data.socket_id);
+        // Setup data connection
+        const dataChannel = peerConnection.createDataChannel('data_channel');
+        this.setupDataChannelListeners(dataChannel, data.socket_id);
+        // Create the offer
         const offer = await this.createOffer(peerConnection);
         // Signal the offer
         this.socket.emit('signal_offer', {from: this.socketId, to: data.socket_id, offer});
@@ -151,6 +187,13 @@ export class SignallingService {
         this.socket.emit('signal_ice', {from: this.socketId, to: guestSocketId, iceCandidate: candidate});
       }
     }
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/onconnectionstatechange
+    peerConnection.onconnectionstatechange = event => {
+      console.log(`Connection state with ${guestSocketId} has changed to ${peerConnection.connectionState}`);
+    }
+
+    // Receiving Media Track over the RTC connection
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addTrack
     peerConnection.ontrack = event => {
       console.log(`Receiving media track from ${guestSocketId}`, event);
@@ -160,6 +203,14 @@ export class SignallingService {
       }
     }
 
+    // Receiving Data over the RTC data channel
+    peerConnection.ondatachannel = (event) => {
+      console.log(`Receiving data channel from ${guestSocketId}`, event);
+      if (event.channel) {
+        this.setupDataChannelListeners(event.channel, guestSocketId);
+      }
+    };
+
     // Add local stream to the connection (if available) so it can be shared
     if (this.localMediaStream) {
       for (const track of this.localMediaStream.getTracks()) {
@@ -168,9 +219,31 @@ export class SignallingService {
     }
 
     // Add connection to list of peers
-    this.peerList.push({guestSocketId, peerConnection});
+    this.peerList.push({guestSocketId, peerConnection, dataChannel: null});
 
     return peerConnection;
+  }
+
+  private setupDataChannelListeners(dataChannel: RTCDataChannel, guestSocketId: string) {
+    // Setup Listeners
+    dataChannel.onopen = () => {
+      console.log(`Data channel open [${guestSocketId}]`);
+    };
+    dataChannel.onclose = () => {
+      console.log(`Data channel closed [${guestSocketId}]`);
+    };
+    dataChannel.onmessage = (event) => {
+      console.log(`Receiving data message from ${guestSocketId}`, event);
+      if (typeof this.onDataMessage === 'function') {
+        this.onDataMessage(guestSocketId, event.data);
+      }
+    };
+    // Save data channel to peer
+    const peer = this.peerList.find(peer => peer.guestSocketId === guestSocketId);
+    if (peer) {
+      // Assign the Answer
+      peer.dataChannel = dataChannel;
+    }
   }
 
   /**

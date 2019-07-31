@@ -2,7 +2,8 @@ const path = require('path');
 
 module.exports = {
   entry: {
-    main: './src/socket/index.ts',
+    chat: './src/socket/chat.ts',
+    video: './src/socket/video.ts',
     home: './src/home/index.ts'
   },
   mode: 'development',

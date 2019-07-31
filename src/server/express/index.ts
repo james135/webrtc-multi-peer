@@ -19,9 +19,14 @@ export const setupExpressServer = () => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
 
-  // Serve socket.html file
-  app.get('/:room_id', function(req, res){
-    res.sendFile(path.join(__dirname, 'public', 'socket.html'));
+  // Serve video.html file
+  app.get('/video/:room_id', function(req, res){
+    res.sendFile(path.join(__dirname, 'public', 'video.html'));
+  });
+
+  // Serve chat.html file
+  app.get('/chat/:room_id', function(req, res){
+    res.sendFile(path.join(__dirname, 'public', 'chat.html'));
   });
 
   return app;
